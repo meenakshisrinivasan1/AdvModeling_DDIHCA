@@ -1,0 +1,3 @@
+"0","for (t in 1:n_t){                   # loop through the number of cycles"
+"0","  m_M_pill[t + 1, ] <- m_M_pill[t, ] %*% m_P_pill  # estimate the state vector for the next cycle (t + 1)"
+"0","}"
