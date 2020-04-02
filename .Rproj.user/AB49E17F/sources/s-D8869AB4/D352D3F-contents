@@ -1,0 +1,662 @@
+---
+title: 'Simple 3-state Markov model in R'
+author: "The DARTH workgroup"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+#@SM you can wrap this in text that is not printed every time by having eval = FALSE and echo = FALS. You do need to keep in in, as we like to 
+
+
+ 
+```{r, eval = FALSE, echo = FALSE} 
+Developed by the Decision Analysis in R for Technologies in Health (DARTH) workgroup:
+
+Fernando Alarid-Escudero, PhD (1) 
+
+Eva A. Enns, MS, PhD (2)	
+
+M.G. Myriam Hunink, MD, PhD (3,4)
+
+Hawre J. Jalal, MD, PhD (5) 
+
+Eline M. Krijkamp, MSc (3)	
+
+Petros Pechlivanoglou, PhD (6,7)
+
+Alan Yang, MSc (7)
+
+In collaboration of: 		
+
+1. Drug Policy Program, Center for Research and Teaching in Economics (CIDE) - CONACyT, 
+   Aguascalientes, Mexico
+2. University of Minnesota School of Public Health, Minneapolis, MN, USA
+3. Erasmus MC, Rotterdam, The Netherlands
+4. Harvard T.H. Chan School of Public Health, Boston, USA
+5. University of Pittsburgh Graduate School of Public Health, Pittsburgh, PA, USA
+6. University of Toronto, Toronto ON, Canada
+7. The Hospital for Sick Children, Toronto ON, Canada
+
+Please cite our publications when using this code:
+ 
+- Jalal H, Pechlivanoglou P, Krijkamp E, Alarid-Escudero F, Enns E, Hunink MG. 
+An Overview of R in Health Decision Sciences. Med Decis Making. 2017; 37(3): 735-746. 
+https://journals.sagepub.com/doi/abs/10.1177/0272989X16686559
+ 
+- Krijkamp EM, Alarid-Escudero F, Enns EA, Jalal HJ, Hunink MGM, Pechlivanoglou P. 
+Microsimulation modeling for health decision sciences using R: A tutorial. 
+Med Decis Making. 2018;38(3):400–22. 
+https://journals.sagepub.com/doi/abs/10.1177/0272989X18754513
+ 
+- Krijkamp EM, Alarid-Escudero F, Enns E, Pechlivanoglou P, Hunink MM, Jalal H. 
+A Multidimensional Array Representation of State-Transition Model Dynamics. 
+Med Decis Making. Online First https://doi.org/10.1177/0272989X19893973
+
+Copyright 2017, THE HOSPITAL FOR SICK CHILDREN AND THE COLLABORATING INSTITUTIONS. 
+All rights reserved in Canada, the United States and worldwide. Copyright, 
+trademarks, trade names and any and all associated intellectual property are 
+exclusively owned by THE HOSPITAL FOR Sick CHILDREN and the collaborating 
+institutions. These materials may be used, reproduced, modified, distributed 
+and adapted with proper attribution.
+```
+
+For this research we made use of the template developed by the Decision Analysis in R for Technologies in Health (DARTH) workgroup: <http://darthworkgroup.com>.
+
+The notation of our code is based on the following provided framework and coding convention:
+Alarid-Escudero, F., Krijkamp, E.M., Pechlivanoglou, P. et al. A Need for Change! A Coding Framework for Improving Transparency in Decision Modeling. PharmacoEconomics 37, 1329–1339 (2019). <https://doi.org/10.1007/s40273-019-00837-x>.
+
+
+
+\newpage
+
+```{r}
+rm(list = ls())      # clear memory (removes all the variables from the workspace)
+```
+
+# 01 Load packages
+
+```{r}
+if (!require('pacman')) install.packages('pacman'); library(pacman) # use this package to conveniently install other packages
+# load (install if required) packages from CRAN
+p_load("diagram") 
+```
+
+# 02 Load functions
+
+```{r}
+# no functions required
+```
+
+# 03 Input model parameters
+
+```{r}
+# Strategy names
+v_names_str <- c("Base Case", "Pill + Inducer", "Pill + Inhibitor")  
+
+# Number of strategies
+n_str <- length(v_names_str)
+
+# Markov model parameters
+v_n  <- c("Initial", "Birth", "Induced abortion",         # state names- 9 states
+          "Spontanous abortion", "Ectopic pregnancy",
+          "VTE", "MI", "Stroke", "IMB")    
+n_states  <- length(v_n)                                  # number of states
+n_t  <- 29                                # number of cycles for reproductive age group 15-44 years
+
+#Probability of unintended pregnancy (UP)
+
+p_up_pill <- 0.0111             # probability of unintended pregnancy (UP) with pill alone
+p_up_pill_inducer <- 0.0156     # probability of UP with pill + enzyme inducer
+p_up_pill_inhibitor <- 0.0082   # probability of UP with pill + enzyme inhibitor
+
+# Conditional probability of Unintended pregnancy outcomes
+# These sum to 1
+# @MS here I would say, "Probability of birth given you ahve an"
+
+p_birth <- 0.3663               # probability of birth 
+p_inducedabortion <- 0.4554     # probability of induced abortion
+p_spontaneousabortion <- 0.1683 # probability of spontaneous abortion
+p_ectopicpregnancy <- 0.01      # probability of ectopic pregnancy
+
+# Unintended pregnancy outcomes by Strategy 
+# These outcomes are probability of having an unintended pregnancy, given that you were on 
+# one of the three strategies (do not sum to 1)
+
+## Unintended pregnancy outcomes Strategy 1 - Pill only group
+p_birth_pill <- p_up_pill * p_birth
+p_inducedabortion_pill <- p_up_pill * p_inducedabortion
+p_spontaneousbaortion_pill <- p_up_pill * p_spontaneousabortion
+p_ectopicpregnancy_pill <- p_up_pill * p_ectopicpregnancy
+
+
+## Unintended pregnancy outcomes Strategy 2 - Pill + enzyme inducer group
+p_birth_pill_inducer <- p_up_pill_inducer * p_birth
+p_inducedabortion_pill_inducer <- p_up_pill_inducer * p_inducedabortion
+p_spontaneousbaortion_pill_inducer <- p_up_pill_inducer * p_spontaneousabortion
+p_ectopicpregnancy_pill_inducer <- p_up_pill_inducer * p_ectopicpregnancy
+
+
+## Unintended pregnancy outcomes Strategy 3 - Pill + enzyme inhibitor group
+p_birth_pill_inhibitor <- p_up_pill_inhibitor * p_birth
+p_inducedabortion_pill_inhibitor <- p_up_pill_inhibitor * p_inducedabortion
+p_spontaneousbaortion_pill_inhibitor <- p_up_pill_inhibitor * p_spontaneousabortion
+p_ectopicpregnancy_pill_inhibitor <- p_up_pill_inhibitor * p_ectopicpregnancy
+
+## Probability of adverse event outcomes
+p_vte <- 0.001
+p_mi <- 0.000205
+p_stroke <- 0.00037026
+p_imb <- 0.005
+
+## Probability of adverse event outcomes by strategy
+
+## Probability of adverse event outcomes Strategy 1 - Pill
+p_vte_pill <- p_vte
+p_mi_pill <- p_mi
+p_stroke_pill <- p_stroke
+p_imb_pill <- p_imb
+
+## Probability of adverse event outcomes Strategy 2 - Pill + enzyme inducer
+p_vte_pill_inducer <- p_vte
+p_mi_pill_inducer <- p_mi
+p_stroke_pill_inducer <- p_stroke
+p_imb_pill_inducer <- 0.07
+
+## Probability of adverse event outcomes Strategy 3 - Pill + enzyme inhibitor
+p_vte_pill_inhibitor <- p_vte + 0.2 * p_vte
+p_mi_pill_inhibitor <- p_mi
+p_stroke_pill_inhibitor <- p_stroke
+p_imb_pill_inhibitor <- p_imb
+
+
+# Costs of initial state for three strategies
+
+c_pill  <- 680          # cost of remaining in pill only group
+c_pill_inducer <- 340   # cost of remaining in pill + enzyme inducer group (conservative)
+c_pill_inhibitor <-340  # cost of remaining in pill + enzyme inhibitor group (conservative)
+
+# Cost of birth outcomes 
+c_birth  <- 13252              # cost of remaining one cycle sick
+c_inducedabortion  <- 931      # cost of remaining one cycle dead
+c_spontaneousabortion <- 1141  # cost of spontaneous abortion
+c_ectopicpregnancy <- 6174     # cost of ectopic pregnancy
+
+# cost of adverse event outcomes
+c_vte <- 14305                # cost of venous thromboembolism
+c_mi <- 23528                 # cost of myocardial infarction
+c_stroke <- 28979             # cost of stroke
+c_imb <- 50                   # cost of intermenstrual bleeding (conservative)
+  
+
+# Utility values 
+
+## Utility of initial state for three strategies 
+u_pill  <-  1                 # Assuming perfect health on pill alone                   
+u_pill_inducer <- 0.95        # Lowered utility because of condition that requires drug (epilepsy, HIV etc)
+u_pill_inhibitor <- 0.95      # Lowered utility because of condition that requires drug (epilepsy, HIV etc)
+
+  
+u_birth  <-  0.9064              # Utility of birth     
+u_inducedabortion  <- 0.9615     # Utility of abortion
+u_spontaneousabortion <- 0.9423  # Utility of spontaneous abortion
+u_ectopicpregnancy <- 0.91667    # Utility of ectopic pregnancy
+  
+u_vte <- 0.81                   # Utility of VTE
+u_mi <- 0.67                    # Utility of MI
+u_stroke <- 0.33                # Utility of Stroke
+u_imb <- 0.78                   # Utility of Inter menstrual bleeding
+
+d_e <- d_c <- 0.03                      # equal discount of costs and QALYs by 3%
+
+# calculate discount weights for costs for each cycle based on discount rate d_c
+v_dwc <- 1 / (1 + d_e) ^ (0:n_t) 
+# calculate discount weights for effectiveness for each cycle based on discount rate d_e
+v_dwe <- 1 / (1 + d_c) ^ (0:n_t) 
+```
+
+## ################################################################################################
+## ################################################################################################
+## ################################################################################################
+
+### STRATEGY 1 PILL ONLY
+
+## Draw the state-transition cohort model for the strategy 1 - "Pill only"
+```{r}
+m_P_diag_pill <- matrix(0, nrow = n_states, ncol = n_states, dimnames = list(v_n, v_n))
+m_P_diag_pill["Initial", "Initial" ]  = "" 
+m_P_diag_pill["Initial", "Birth" ]  = ""
+m_P_diag_pill["Initial", "Induced abortion" ]  = ""
+m_P_diag_pill["Initial", "Spontanous abortion" ]  = ""
+m_P_diag_pill["Initial", "Ectopic pregnancy" ]  = ""
+m_P_diag_pill["Initial", "VTE" ]  = ""
+m_P_diag_pill["Initial", "MI" ]  = ""
+m_P_diag_pill["Initial", "Stroke" ]  = ""
+m_P_diag_pill["Initial", "IMB" ]  = ""
+m_P_diag_pill["IMB", "Initial" ]  = ""
+layout.fig <- c(1, 4, 4)
+st_tr_diag_pill <- plotmat(t(m_P_diag_pill), t(layout.fig), self.cex = 0.5, curve = 0, arr.pos = 0.8,  
+        latex = T, arr.type = "curved", relsize = 0.85, box.prop = 0.8, 
+        cex = 0.8, box.cex = 0.7, lwd = 1)
+```
+
+# 04 Define and initialize matrices and vectors
+
+## 04.1 Cohort trace for the strategy 1 - "Pill only"
+
+```{r}
+# create the cohort trace
+m_M_pill <- matrix(NA, 
+              nrow = n_t + 1 ,  # create Markov trace (n.t + 1 because R doesn't 
+                                # understand Cycle 0)
+              ncol = n_states, 
+              dimnames = list(0:n_t, v_n))
+
+m_M_pill[1, ] <- c(1,0,0,0,0,0,0,0,0)          # initialize first cycle of Markov trace
+```
+
+## 04.2 Transition probability matrix for the strategy 1 - "Pill only"
+
+```{r}
+# create the transition probability matrix
+m_P_pill  <- matrix(0,
+               nrow = n_states, ncol = n_states,
+               dimnames = list(v_n, v_n)) # name the columns and rows of the transition 
+                                          # probability matrix
+m_P_pill
+```
+
+Fill in the transition probability matrix for the strategy 1 - "Pill only":
+
+```{r}
+# from Healthy
+m_P_pill["Initial", "Initial" ] <- 1 - p_birth_pill - p_inducedabortion_pill - p_spontaneousbaortion_pill - p_ectopicpregnancy_pill - p_vte_pill - p_mi_pill - p_stroke_pill - p_imb_pill 
+m_P_pill["Initial", "Birth" ]    <- p_birth_pill 
+m_P_pill["Initial", "Induced abortion" ]      <- p_inducedabortion_pill 
+m_P_pill["Initial", "Spontanous abortion" ]  <- p_spontaneousbaortion_pill 
+m_P_pill["Initial", "Ectopic pregnancy" ]   <- p_ectopicpregnancy_pill 
+m_P_pill["Initial", "VTE" ] <-  p_vte_pill 
+m_P_pill["Initial", "MI" ]  <- p_mi_pill 
+m_P_pill["Initial", "Stroke" ] <-  p_stroke_pill 
+m_P_pill["Initial", "IMB" ]  <- p_imb_pill 
+m_P_pill["Birth", "Birth" ] <- 1
+m_P_pill["Induced abortion", "Induced abortion" ] <- 1
+m_P_pill["Spontanous abortion", "Spontanous abortion" ] <- 1
+m_P_pill["Ectopic pregnancy", "Ectopic pregnancy" ] <- 1
+m_P_pill["VTE", "VTE" ] <- 1
+m_P_pill["MI", "MI" ] <- 1
+m_P_pill["Stroke", "Stroke" ] <- 1
+m_P_pill["IMB", "IMB" ] <- 0.2
+m_P_pill["IMB", "Initial"] <- 0.8
+
+# check rows add up to 1
+rowSums(m_P_pill)
+```
+
+# 05 Run Markov model for the strategy 1 - "Pill only"
+
+```{r}
+for (t in 1:n_t){                   # loop through the number of cycles
+  m_M_pill[t + 1, ] <- m_M_pill[t, ] %*% m_P_pill  # estimate the state vector for the next cycle (t + 1)
+}
+
+```
+
+# 06 Compute and Plot Outcomes for the strategy 1 - "Pill only"
+
+## 06.1 Cohort trace for the strategy 1 - "Pill only"
+
+```{r}
+df_M_pill <- as.data.frame(m_M_pill) %>%
+  tibble::rowid_to_column("cycle") %>%
+  tidyr::gather(state, probability, -1)
+
+ggplot(df_M_pill, aes(cycle, probability, color = state)) +
+  geom_line()
+
+```
+
+## 06.2 Total Probability for Unintended pregnancy and adverse event outcomes for the strategy 1 - "Pill only"
+
+```{r}
+v_up_pill <- rowSums(m_M_pill[, 2:5])           # alternative way of calculating the OS probability   
+
+v_adverseevents_pill <- rowSums(m_M_pill[, 6:9])
+
+```
+
+
+# 07 Compute Cost-Effectiveness Outcomes for the strategy 1 - "Pill only"
+
+## 07.1 Mean Costs and QALYs for the strategy 1 - "Pill only"
+
+```{r}
+# per cycle
+# calculate expected costs by multiplying m_M with the cost vector for the different 
+# health states   
+v_tc_pill <- m_M_pill %*% c(c_pill, c_birth, c_inducedabortion, c_spontaneousabortion,
+                  c_ectopicpregnancy, c_vte, c_mi, c_stroke, c_imb)  
+# calculate expected QALYs by multiplying m_M with the utilities for the different 
+# health states   
+v_tu_pill <- m_M_pill %*% c(u_pill, u_birth, u_inducedabortion, u_spontaneousabortion,
+                  u_ectopicpregnancy, u_vte, u_mi, u_stroke, u_imb)  
+```
+
+## 07.2 Discounted Mean Costs and QALYs for the strategy 1 - "Pill only"
+
+```{r}
+# Discount costs by multiplying the cost vector with discount weights (v_dw) 
+v_tc_d_pill <-  t(v_tc_pill) %*% v_dwc
+# Discount QALYS by multiplying the QALYs vector with discount weights (v_dw)
+v_te_d_pill <-  t(v_tu_pill) %*% v_dwe
+```
+
+## 07.3 Results for the strategy 1 - "Pill only"
+
+```{r}
+results_pill <- data.frame( "Total Discounted Cost" = v_tc_d_pill, 
+                   
+                       "Total Discounted QALYs" = v_te_d_pill, 
+                       check.names = F)
+results_pill
+```
+
+
+## ##################################################################################
+## ##################################################################################
+## ##################################################################################
+## ##################################################################################
+
+## Repeating the above for Strategy 2 - Pill + Enzyme inducer strategy
+
+
+## Draw the state-transition cohort model for the strategy 2 - "Pill + enzyme inducer"
+```{r}
+m_P_diag_pill_inducer <- matrix(0, nrow = n_states, ncol = n_states, dimnames = list(v_n, v_n))
+m_P_diag_pill_inducer["Initial", "Initial" ]  = "" 
+m_P_diag_pill_inducer["Initial", "Birth" ]  = ""
+m_P_diag_pill_inducer["Initial", "Induced abortion" ]  = ""
+m_P_diag_pill_inducer["Initial", "Spontanous abortion" ]  = ""
+m_P_diag_pill_inducer["Initial", "Ectopic pregnancy" ]  = ""
+m_P_diag_pill_inducer["Initial", "VTE" ]  = ""
+m_P_diag_pill_inducer["Initial", "MI" ]  = ""
+m_P_diag_pill_inducer["Initial", "Stroke" ]  = ""
+m_P_diag_pill_inducer["Initial", "IMB" ]  = ""
+m_P_diag_pill_inducer["IMB", "Initial" ]  = ""
+layout.fig <- c(1,4,4)
+st_tr_diag_pill_inducer <- plotmat(t(m_P_diag_pill_inducer), t(layout.fig), self.cex = 0.5, curve = 0, arr.pos = 0.8,  
+        latex = T, arr.type = "curved", relsize = 0.85, box.prop = 0.8, 
+        cex = 0.8, box.cex = 0.7, lwd = 1)
+```
+
+# 04 Define and initialize matrices and vectors
+
+## 04.1 Cohort trace for the strategy 2 - "Pill + enzyme inducer"
+
+```{r}
+# create the cohort trace
+m_M_pill_inducer <- matrix(NA, 
+              nrow = n_t + 1 ,  # create Markov trace (n.t + 1 because R doesn't 
+                                # understand Cycle 0)
+              ncol = n_states, 
+              dimnames = list(0:n_t, v_n))
+
+m_M_pill_inducer[1, ] <- c(1,0,0,0,0,0,0,0,0)          # initialize first cycle of Markov trace
+```
+
+## 04.2 Transition probability matrix for the strategy 2 - "Pill + enzyme inducer"
+
+```{r}
+# create the transition probability matrix
+m_P_pill_inducer  <- matrix(0,
+               nrow = n_states, ncol = n_states,
+               dimnames = list(v_n, v_n)) # name the columns and rows of the transition 
+                                          # probability matrix
+m_P_pill_inducer
+```
+
+Fill in the transition probability matrix for the strategy 2 - "Pill + enzyme inducer"
+
+```{r}
+# from Healthy
+m_P_pill_inducer["Initial", "Initial" ] <- 1 - p_birth_pill_inducer - p_inducedabortion_pill_inducer - p_spontaneousbaortion_pill_inducer - p_ectopicpregnancy_pill_inducer - p_vte_pill_inducer - p_mi_pill_inducer - p_stroke_pill_inducer - p_imb_pill_inducer 
+m_P_pill_inducer["Initial", "Birth" ]    <- p_birth_pill_inducer 
+m_P_pill_inducer["Initial", "Induced abortion" ]      <- p_inducedabortion_pill_inducer 
+m_P_pill_inducer["Initial", "Spontanous abortion" ]  <- p_spontaneousbaortion_pill_inducer
+m_P_pill_inducer["Initial", "Ectopic pregnancy" ]   <- p_ectopicpregnancy_pill_inducer
+m_P_pill_inducer["Initial", "VTE" ] <-  p_vte_pill_inducer 
+m_P_pill_inducer["Initial", "MI" ]  <- p_mi_pill_inducer 
+m_P_pill_inducer["Initial", "Stroke" ] <-  p_stroke_pill_inducer 
+m_P_pill_inducer["Initial", "IMB" ]  <- p_imb_pill_inducer
+m_P_pill_inducer["Birth", "Birth" ] <- 1
+m_P_pill_inducer["Induced abortion", "Induced abortion" ] <- 1
+m_P_pill_inducer["Spontanous abortion", "Spontanous abortion" ] <- 1
+m_P_pill_inducer["Ectopic pregnancy", "Ectopic pregnancy" ] <- 1
+m_P_pill_inducer["VTE", "VTE" ] <- 1
+m_P_pill_inducer["MI", "MI" ] <- 1
+m_P_pill_inducer["Stroke", "Stroke" ] <- 1
+m_P_pill_inducer["IMB", "IMB" ] <- 0.2
+m_P_pill_inducer["IMB", "Initial"] <- 0.8
+
+# check rows add up to 1
+rowSums(m_P_pill_inducer)
+```
+
+# 05 Run Markov model for the strategy 2 - "Pill + enzyme inducer"
+
+```{r}
+for (t in 1:n_t){                   # loop through the number of cycles
+  m_M_pill_inducer[t + 1, ] <- m_M_pill_inducer[t, ] %*% m_P_pill_inducer  # estimate the state vector for the next cycle (t + 1)
+}
+
+```
+
+# 06 Compute and Plot Outcomes for Strategy 2 - "Pill + enzyme inducer"
+
+## 06.1 Cohort trace
+
+```{r}
+df_M_pill_inducer <- as.data.frame(m_M_pill_inducer) %>%
+  tibble::rowid_to_column("cycle") %>%
+  tidyr::gather(state, probability, -1)
+
+ggplot(df_M_pill_inducer, aes(cycle, probability, color = state)) +
+  geom_line()
+
+```
+
+## 06.2 Total Probability for Unintended pregnancy and adverse event outcomes for strategy 2 - "Pill + enzyme inducer"
+
+```{r}
+v_up_pill_inducer <- rowSums(m_M_pill_inducer[, 2:5])           # alternative way of calculating the OS probability   
+
+v_adverseevents_pill_inducer <- rowSums(m_M_pill_inducer[, 6:9])
+
+```
+
+
+# 07 Compute Cost-Effectiveness Outcomes for the strategy 2 - "Pill + enzyme inducer"
+
+## 07.1 Mean Costs and QALYs for the strategy 2 - "Pill + enzyme inducer"
+
+```{r}
+# per cycle
+# calculate expected costs by multiplying m_M with the cost vector for the different 
+# health states   
+v_tc_pill_inducer <- m_M_pill_inducer %*% c(c_pill_inducer, c_birth, c_inducedabortion, c_spontaneousabortion,
+                  c_ectopicpregnancy, c_vte, c_mi, c_stroke, c_imb)  
+# calculate expected QALYs by multiplying m_M with the utilities for the different 
+# health states   
+v_tu_pill_inducer <- m_M_pill_inducer %*% c(u_pill_inducer, u_birth, u_inducedabortion, u_spontaneousabortion,
+                  u_ectopicpregnancy, u_vte, u_mi, u_stroke, u_imb)  
+```
+
+## 07.2 Discounted Mean Costs and QALYs for the strategy 2 - "Pill + enzyme inducer"
+
+```{r}
+# Discount costs by multiplying the cost vector with discount weights (v_dw) 
+v_tc_d_pill_inducer <-  t(v_tc_pill_inducer) %*% v_dwc
+# Discount QALYS by multiplying the QALYs vector with discount weights (v_dw)
+v_te_d_pill_inducer <-  t(v_tu_pill_inducer) %*% v_dwe
+```
+
+## 07.3 Results for the strategy 2 - "Pill + enzyme inducer"
+
+```{r}
+results_pill_inducer <- data.frame( "Total Discounted Cost" = v_tc_d_pill_inducer, 
+                   
+                       "Total Discounted QALYs" = v_te_d_pill_inducer, 
+                       check.names = F)
+results_pill_inducer
+```
+
+
+
+## ##################################################################################
+## ##################################################################################
+## ##################################################################################
+## ##################################################################################
+
+## Repeating the above for Strategy 3 - Pill + Enzyme inhibitor strategy
+
+
+## Draw the state-transition cohort model for the strategy 3 - "Pill + enzyme inhibitor"
+```{r}
+m_P_diag_pill_inhibitor <- matrix(0, nrow = n_states, ncol = n_states, dimnames = list(v_n, v_n))
+m_P_diag_pill_inhibitor["Initial", "Initial" ]  = "" 
+m_P_diag_pill_inhibitor["Initial", "Birth" ]  = ""
+m_P_diag_pill_inhibitor["Initial", "Induced abortion" ]  = ""
+m_P_diag_pill_inhibitor["Initial", "Spontanous abortion" ]  = ""
+m_P_diag_pill_inhibitor["Initial", "Ectopic pregnancy" ]  = ""
+m_P_diag_pill_inhibitor["Initial", "VTE" ]  = ""
+m_P_diag_pill_inhibitor["Initial", "MI" ]  = ""
+m_P_diag_pill_inhibitor["Initial", "Stroke" ]  = ""
+m_P_diag_pill_inhibitor["Initial", "IMB" ]  = ""
+m_P_diag_pill_inhibitor["IMB", "Initial" ]  = ""
+layout.fig <- c(1,4,4)
+st_tr_diag_pill_inhibitor <- plotmat(t(m_P_diag_pill_inhibitor), t(layout.fig), self.cex = 0.5, curve = 0, arr.pos = 0.8,  
+        latex = T, arr.type = "curved", relsize = 0.85, box.prop = 0.8, 
+        cex = 0.8, box.cex = 0.7, lwd = 1)
+```
+
+# 04 Define and initialize matrices and vectors
+
+## 04.1 Cohort trace for the strategy 3 - "Pill + enzyme inhibitor"
+
+```{r}
+# create the cohort trace
+m_M_pill_inhibitor <- matrix(NA, 
+              nrow = n_t + 1 ,  # create Markov trace (n.t + 1 because R doesn't 
+                                # understand Cycle 0)
+              ncol = n_states, 
+              dimnames = list(0:n_t, v_n))
+
+m_M_pill_inhibitor[1, ] <- c(1,0,0,0,0,0,0,0,0)          # initialize first cycle of Markov trace
+```
+
+## 04.2 Transition probability matrix for the strategy 3 - "Pill + enzyme inhibitor"
+
+```{r}
+# create the transition probability matrix
+m_P_pill_inhibitor  <- matrix(0,
+               nrow = n_states, ncol = n_states,
+               dimnames = list(v_n, v_n)) # name the columns and rows of the transition 
+                                          # probability matrix
+m_P_pill_inhibitor
+```
+
+Fill in the transition probability matrix for the strategy 3 - "Pill + enzyme inhibitor"
+
+```{r}
+# from Healthy
+m_P_pill_inhibitor["Initial", "Initial" ] <- 1 - p_birth_pill_inhibitor - p_inducedabortion_pill_inhibitor - p_spontaneousbaortion_pill_inhibitor - p_ectopicpregnancy_pill_inhibitor - p_vte_pill_inhibitor - p_mi_pill_inhibitor - p_stroke_pill_inhibitor - p_imb_pill_inhibitor 
+m_P_pill_inhibitor["Initial", "Birth" ]    <- p_birth_pill_inhibitor
+m_P_pill_inhibitor["Initial", "Induced abortion" ]      <- p_inducedabortion_pill_inhibitor
+m_P_pill_inhibitor["Initial", "Spontanous abortion" ]  <- p_spontaneousbaortion_pill_inhibitor
+m_P_pill_inhibitor["Initial", "Ectopic pregnancy" ]   <- p_ectopicpregnancy_pill_inhibitor
+m_P_pill_inhibitor["Initial", "VTE" ] <-  p_vte_pill_inhibitor 
+m_P_pill_inhibitor["Initial", "MI" ]  <- p_mi_pill_inhibitor
+m_P_pill_inhibitor["Initial", "Stroke" ] <-  p_stroke_pill_inhibitor
+m_P_pill_inhibitor["Initial", "IMB" ]  <- p_imb_pill_inhibitor
+m_P_pill_inhibitor["Birth", "Birth" ] <- 1
+m_P_pill_inhibitor["Induced abortion", "Induced abortion" ] <- 1
+m_P_pill_inhibitor["Spontanous abortion", "Spontanous abortion" ] <- 1
+m_P_pill_inhibitor["Ectopic pregnancy", "Ectopic pregnancy" ] <- 1
+m_P_pill_inhibitor["VTE", "VTE" ] <- 1
+m_P_pill_inhibitor["MI", "MI" ] <- 1
+m_P_pill_inhibitor["Stroke", "Stroke" ] <- 1
+m_P_pill_inhibitor["IMB", "IMB" ] <- 0.2
+m_P_pill_inhibitor["IMB", "Initial"] <- 0.8
+
+# check rows add up to 1
+rowSums(m_P_pill_inhibitor)
+```
+
+# 05 Run Markov model for the strategy 3 - "Pill + enzyme inhibitor"
+
+```{r}
+for (t in 1:n_t){                   # loop through the number of cycles
+  m_M_pill_inhibitor[t + 1, ] <- m_M_pill_inhibitor[t, ] %*% m_P_pill_inhibitor  # estimate the state vector for the next cycle (t + 1)
+}
+
+```
+
+# 06 Compute and Plot Outcomes for Strategy 3 - "Pill + enzyme inhibitor"
+
+## 06.1 Cohort trace
+
+```{r}
+df_M_pill_inhibitor <- as.data.frame(m_M_pill_inhibitor) %>%
+  tibble::rowid_to_column("cycle") %>%
+  tidyr::gather(state, probability, -1)
+
+ggplot(df_M_pill_inhibitor, aes(cycle, probability, color = state)) +
+  geom_line()
+
+```
+
+## 06.2 Total Probability for Unintended pregnancy and adverse event outcomes for strategy 3 - "Pill + enzyme inhibitor"
+
+```{r}
+v_up_pill_inhibitor <- rowSums(m_M_pill_inhibitor[, 2:5])           # alternative way of calculating the OS probability   
+
+v_adverseevents_pill_inhibitor <- rowSums(m_M_pill_inhibitor[, 6:9])
+
+```
+
+
+# 07 Compute Cost-Effectiveness Outcomes for the strategy 3 - "Pill + enzyme inhibitor"
+
+## 07.1 Mean Costs and QALYs for the strategy 3 - "Pill + enzyme inhibitor"
+
+```{r}
+# per cycle
+# calculate expected costs by multiplying m_M with the cost vector for the different 
+# health states   
+v_tc_pill_inhibitor <- m_M_pill_inhibitor %*% c(c_pill_inhibitor, c_birth, c_inducedabortion, c_spontaneousabortion,
+                  c_ectopicpregnancy, c_vte, c_mi, c_stroke, c_imb)  
+# calculate expected QALYs by multiplying m_M with the utilities for the different 
+# health states   
+v_tu_pill_inhibitor <- m_M_pill_inhibitor %*% c(u_pill_inhibitor, u_birth, u_inducedabortion, u_spontaneousabortion,
+                  u_ectopicpregnancy, u_vte, u_mi, u_stroke, u_imb)  
+```
+
+## 07.2 Discounted Mean Costs and QALYs for the strategy 3 - "Pill + enzyme inhibitor"
+
+```{r}
+# Discount costs by multiplying the cost vector with discount weights (v_dw) 
+v_tc_d_pill_inhibitor <-  t(v_tc_pill_inhibitor) %*% v_dwc
+# Discount QALYS by multiplying the QALYs vector with discount weights (v_dw)
+v_te_d_pill_inhibitor <-  t(v_tu_pill_inhibitor) %*% v_dwe
+```
+
+## 07.3 Results for the strategy 3 - "Pill + enzyme inhibitor"
+
+```{r}
+results_pill_inhibitor <- data.frame( "Total Discounted Cost" = v_tc_d_pill_inhibitor, 
+                   
+                       "Total Discounted QALYs" = v_te_d_pill_inhibitor, 
+                       check.names = F)
+results_pill_inhibitor
+```
