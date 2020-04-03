@@ -171,10 +171,10 @@ preg_rate_by_age <- preg_rate_by_age %>%
 
 ### Probability of birth/ induced abortion/ spontaneous abortion/ ectopic pregnancy by age
 
-v_p_pill_birth$preg_rate_by_age <- preg_rate_by_age$p_preg_age_pill * p_m_pill_birth
-v_p_pill_inducedabortion$preg_rate_by_age <- preg_rate_by_age$p_preg_age_pill * p_m_pill_inducedabortion
-v_p_pill_spontaneousabortion$preg_rate_by_age <- preg_rate_by_age$p_preg_age_pill * p_m_pill_spontaneousbaortion
-v_p_pill_ectopicpregnancy$preg_rate_by_age <- preg_rate_by_age$p_preg_age_pill * p_m_pill_ectopicpregnancy
+preg_rate_by_age$v_p_pill_birth <- preg_rate_by_age$p_preg_age_pill * p_m_pill_birth
+preg_rate_by_age$v_p_pill_inducedabortion <- preg_rate_by_age$p_preg_age_pill * p_m_pill_inducedabortion
+preg_rate_by_age$v_p_pill_spontaneousabortion <- preg_rate_by_age$p_preg_age_pill * p_m_pill_spontaneousbaortion
+preg_rate_by_age$v_p_pill_ectopicpregnancy <- preg_rate_by_age$p_preg_age_pill * p_m_pill_ectopicpregnancy
 
 # Unintended pregnancy outcomes by Strategy 
 # These outcomes are probability of having an unintended pregnancy, given that you were on 
@@ -217,7 +217,7 @@ p_m_mi <- RateToProb(r_mi, 1/12)
 p_m_stroke <- RateToProb(r_stroke, 1/12)
 
 
-p_imb <- 0.005
+p_imb <- 0.15
 
 ## Probability of adverse event outcomes by strategy
 
@@ -319,10 +319,10 @@ m_P_diag_pill["Post-IMB", "VTE" ]  = ""
 m_P_diag_pill["Post-IMB", "MI" ]  = ""
 m_P_diag_pill["Post-IMB", "Stroke" ]  = ""
 
-layout.fig <- c(1,4,4, 1)
-st_tr_diag_pill <- plotmat(t(m_P_diag_pill), t(layout.fig), self.cex = 0.5, curve = 0, arr.pos = 0.8,  
+layout.fig <- c(1,4,4,1)
+st_tr_diag_pill <- plotmat(t(m_P_diag_pill), t(layout.fig), self.cex = 0.5, curve = 0, arr.pos = 0.6,  
         latex = T, arr.type = "curved", relsize = 0.85, box.prop = 0.7, 
-        cex = 0.8, box.cex = 0.7, lwd = 1)
+        cex = 0.7, box.cex = 0.7, lwd = 1)
 ```
 
 # 04 Define and initialize matrices and vectors
@@ -352,14 +352,22 @@ m_P_pill
 ```
 
 Fill in the transition probability matrix for the strategy 1 - "Pill only":
+##Need to create 30 tranition probability matrices for each age
+##Need to run markov chain for each age group for 1 year
+##Prevent persons from entering after the first month and accrue costs for pill taking thereafter
+##
 
 ```{r}
+
+age = 20
+preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age]
+
 # from Healthy
-m_P_pill["Initial", "Initial" ] <- 1 - v_p_pill_birth[1] - v_p_pill_inducedabortion[1] - v_p_pill_spontaneousabortion[1] - v_p_pill_ectopicpregnancy[1] - p_vte_pill - p_mi_pill - p_stroke_pill - p_imb_pill 
-m_P_pill["Initial", "Birth" ]    <- v_p_pill_birth[1]
-m_P_pill["Initial", "Induced abortion" ]      <- v_p_pill_inducedabortion[1] 
-m_P_pill["Initial", "Spontanous abortion" ]  <- v_p_pill_spontaneousabortion[1] 
-m_P_pill["Initial", "Ectopic pregnancy" ]   <- v_p_pill_ectopicpregnancy[1] 
+m_P_pill["Initial", "Initial" ] <- 1 - preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age] - p_vte_pill - p_mi_pill - p_stroke_pill - p_imb_pill 
+m_P_pill["Initial", "Birth" ]    <- preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age]
+m_P_pill["Initial", "Induced abortion" ]      <- preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] 
+m_P_pill["Initial", "Spontanous abortion" ]  <- preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age] 
+m_P_pill["Initial", "Ectopic pregnancy" ]   <- preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age] 
 m_P_pill["Initial", "VTE" ] <-  p_vte_pill
 m_P_pill["Initial", "MI" ]  <- p_mi_pill
 m_P_pill["Initial", "Stroke" ] <-  p_stroke_pill 
@@ -373,24 +381,43 @@ m_P_pill["MI", "MI" ] <- 1
 m_P_pill["Stroke", "Stroke" ] <- 1
 m_P_pill["IMB", "IMB"] <- 0.7
 m_P_pill["IMB", "Post-IMB"] <- 0.3
-m_P_pill["Post-IMB", "Birth"]  = v_p_pill_birth[1]
-m_P_pill["Post-IMB", "Induced abortion"]  = v_p_pill_inducedabortion[1] 
-m_P_pill["Post-IMB", "Spontanous abortion"]  = v_p_pill_spontaneousabortion[1]
-m_P_pill["Post-IMB", "Ectopic pregnancy"]  = v_p_pill_ectopicpregnancy[1]
+m_P_pill["Post-IMB", "Birth"]  = preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age]
+m_P_pill["Post-IMB", "Induced abortion"]  = preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] 
+m_P_pill["Post-IMB", "Spontanous abortion"]  = preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age]
+m_P_pill["Post-IMB", "Ectopic pregnancy"]  = preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age]
 m_P_pill["Post-IMB", "VTE" ]  = p_vte_pill
 m_P_pill["Post-IMB", "MI" ]  = p_mi_pill
 m_P_pill["Post-IMB", "Stroke" ]  = p_stroke_pill
-m_P_pill["Post-IMB", "Post-IMB" ]  = 1 - v_p_pill_birth[1] - v_p_pill_inducedabortion[1] - v_p_pill_spontaneousabortion[1] - v_p_pill_ectopicpregnancy[1] - p_vte_pill - p_mi_pill - p_stroke_pill
+m_P_pill["Post-IMB", "Post-IMB" ]  = 1 - preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age] - p_vte_pill - p_mi_pill - p_stroke_pill
 
 # check rows add up to 1
 rowSums(m_P_pill)
 ```
 
 # 05 Run Markov model for the strategy 1 - "Pill only"
+##And need to run markov chain for each age group for 1 year
 
 ```{r}
 for (t in 1:n_t){                   # loop through the number of cycles
-  m_M_pill[t + 1, ] <- m_M_pill[t, ] %*% m_P_pill  # estimate the state vector for the next cycle (t + 1)
+  m_P_pill_run <- m_P_pill
+  
+  for (t > 1){
+    m_P_pill_run["Initial", "IMB] <- 0
+    m_P_pill_run["Initial",  "Inital"] <- m_P_pill[“Initial, “Inital”] + m_P_pill[“Initial, “IMB”]}
+  
+  for (t %in% c(2,3)) {
+    m_P_pill_run["IMB", "Post IMB"] <- 0.2
+  }
+  
+  for (t %in% c(4:9)){
+    m_P_pill_run["IMB", "Post IMB"] <- 0.3
+  }
+  
+  for (t %in% c(10:12)){
+    m_P_pill_run["IMB", "Post IMB"] <- 0.5
+  }
+  
+  m_M_pill[t + 1, ] <- m_M_pill[t, ] %*% m_P_pill_run  # estimate the state vector for the next cycle (t + 1)
 }
 
 ```
