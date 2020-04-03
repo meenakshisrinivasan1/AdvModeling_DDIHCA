@@ -96,28 +96,15 @@ v_names_str <- c("Base Case", "Pill + Inducer", "Pill + Inhibitor")
 n_str <- length(v_names_str)
 
 # Markov model parameters
-v_n  <- c("Initial", "Birth", "Induced abortion",         # state names- 11 states
+v_n  <- c("Initial", "Birth", "Induced abortion",         # state names- 10 states
           "Spontanous abortion", "Ectopic pregnancy",
-          "VTE", "MI", "Stroke", "IMB", "IMB quitters")    
+          "VTE", "MI", "Stroke", "IMB", "Post-IMB")    
+
 n_states  <- length(v_n)                                  # number of states
                                 
-v_age <- c(15:44) 
-  
-# monthly cycles
-t_years             <- 1                # time horizon in years
-t_cl_month          <- 1                # cycle length in months
-n_CpY               <- 12/t_cl_month    # number of cycles per year
-n_YpC               <- 1/n_CpY          # number of years per cycle
-n_t                 <- (t_years * 12) / t_cl_month  # number of model cycles
+v_age <- c(15:44)  #vector of ages
 
-# p = 1 - exp(-r*dt) # p = probability, r = rate, dt = period of time probability is defined for eg 1 year
-# 
-# r_up_pill = 1.11   # number of failures per 100 woman-years of exposure for 1 year
-# r_up_pill = 0.0111 # number of failures per 1 woman-years of exposure for 1 year
-# 
-# p_yearly = 1 - exp(-0.0111) 
-# 
-# p_monthly = 1 - exp(-0.0111/12)
+n_t <- 12 # 12 cycles of 1 month duration
 
 ProbToRate <- function(p){
   # argument
@@ -127,6 +114,7 @@ ProbToRate <- function(p){
   r <- -log(1 - p)
   r
 }
+
 RateToProb <- function(r, t){
   p <- 1 - exp(-r * t)
   return(p)
@@ -163,30 +151,55 @@ p_m_pill_inducedabortion <- RateToProb(rate_m_inducedabortion, 1/12)
 p_m_pill_spontaneousbaortion <- RateToProb(rate_m_spontaneousabortion, 1/12)
 p_m_pill_ectopicpregnancy <- RateToProb(rate_m_ectopicpregnancy, 1/12)
 
+# Dataset contains pregnancy rate per 1000 women in each age group
+preg_rate_by_age <- read.csv("pregnancy rate.csv") %>%
+  janitor::clean_names()
+
+# Converting the pregnancy rate to probability (probability of pregnancy by age)
+preg_rate_by_age <- preg_rate_by_age %>%
+  mutate(preg_prob_by_age = RateToProb(pregnancy_rate_per1000women, 1/12))
+
+# Calculating probability of pregnancy by age conditional on each strategy (Pill, Pill + Inducer, Pill + Inhibitor)
+
+# p_preg_age_pill = monthly probability of pill failure * general probability of pregnancy by age 
+# p_preg_age_pill_inducer = monthly probability of pill + inducer failure * general probability of pregnancy by age
+# p_preg_age_pill_inhibitor = monthly probability of pill + inhibitor failure * general probability of pregnancy by age
+preg_rate_by_age <- preg_rate_by_age %>%
+  mutate(p_preg_age_pill = preg_prob_by_age*p_m_pill_up,
+         p_preg_age_pill_inducer = preg_prob_by_age*p_m_pill_inducer_up,
+         p_preg_age_pill_inhibitor = preg_prob_by_age*p_m_pill_inhibitor_up)
+
+### Probability of birth/ induced abortion/ spontaneous abortion/ ectopic pregnancy by age
+
+v_p_pill_birth$preg_rate_by_age <- preg_rate_by_age$p_preg_age_pill * p_m_pill_birth
+v_p_pill_inducedabortion$preg_rate_by_age <- preg_rate_by_age$p_preg_age_pill * p_m_pill_inducedabortion
+v_p_pill_spontaneousabortion$preg_rate_by_age <- preg_rate_by_age$p_preg_age_pill * p_m_pill_spontaneousbaortion
+v_p_pill_ectopicpregnancy$preg_rate_by_age <- preg_rate_by_age$p_preg_age_pill * p_m_pill_ectopicpregnancy
+
 # Unintended pregnancy outcomes by Strategy 
 # These outcomes are probability of having an unintended pregnancy, given that you were on 
 # one of the three strategies (do not sum to 1)
 
 ## *Monthly* *probabilities*
 ## Unintended pregnancy outcomes Strategy 1 - Pill only group
-p_pill_birth <- p_m_pill_up * p_m_pill_birth
-p_pill_inducedabortion <- p_m_pill_up * p_m_pill_inducedabortion
-p_pill_spontaneousbaortion <- p_m_pill_up * p_m_pill_spontaneousbaortion
-p_pill_ectopicpregnancy <- p_m_pill_up * p_m_pill_ectopicpregnancy
+#p_pill_birth <- p_m_pill_up * p_m_pill_birth
+#p_pill_inducedabortion <- p_m_pill_up * p_m_pill_inducedabortion
+#p_pill_spontaneousbaortion <- p_m_pill_up * p_m_pill_spontaneousbaortion
+#p_pill_ectopicpregnancy <- p_m_pill_up * p_m_pill_ectopicpregnancy
 
 
-## Unintended pregnancy outcomes Strategy 2 - Pill + enzyme inducer group
-p_pill_inducer <- p_m_pill_inducer_up * p_m_pill_birth
-p_pill_inducerinducedabortion <- p_m_pill_inducer_up * p_m_pill_inducedabortion
-p_pill_inducerspontaneousbaortion <- p_m_pill_inducer_up * p_m_pill_spontaneousbaortion
-p_pill_inducerectopicpregnancy <- p_m_pill_inducer_up * p_m_pill_ectopicpregnancy
-
-
-## Unintended pregnancy outcomes Strategy 3 - Pill + enzyme inhibitor group
-p_pill_inhibitor_birth <- p_m_pill_inhibitor_up * p_m_pill_birth
-p_pill_inhibitor_inducedabortion <- p_m_pill_inhibitor_up * p_m_pill_inducedabortion
-p_pill_inhibitor_spontaneousbaortion <- p_m_pill_inhibitor_up * p_m_pill_spontaneousbaortion
-p_pill_inhibitor_ectopicpregnancy <- p_m_pill_inhibitor_up * p_m_pill_ectopicpregnancy
+# ## Unintended pregnancy outcomes Strategy 2 - Pill + enzyme inducer group
+# p_pill_inducer <- p_m_pill_inducer_up * p_m_pill_birth
+# p_pill_inducerinducedabortion <- p_m_pill_inducer_up * p_m_pill_inducedabortion
+# p_pill_inducerspontaneousbaortion <- p_m_pill_inducer_up * p_m_pill_spontaneousbaortion
+# p_pill_inducerectopicpregnancy <- p_m_pill_inducer_up * p_m_pill_ectopicpregnancy
+# 
+# 
+# ## Unintended pregnancy outcomes Strategy 3 - Pill + enzyme inhibitor group
+# p_pill_inhibitor_birth <- p_m_pill_inhibitor_up * p_m_pill_birth
+# p_pill_inhibitor_inducedabortion <- p_m_pill_inhibitor_up * p_m_pill_inducedabortion
+# p_pill_inhibitor_spontaneousbaortion <- p_m_pill_inhibitor_up * p_m_pill_spontaneousbaortion
+# p_pill_inhibitor_ectopicpregnancy <- p_m_pill_inhibitor_up * p_m_pill_ectopicpregnancy
 
 ## *Yearly* *Probability* of adverse event outcomes
 p_vte <- 0.001
@@ -266,22 +279,7 @@ u_stroke <- 0.33                # Utility of Stroke
 u_imb <- 0.78                   # Utility of Inter menstrual bleeding
 
 
-preg_rate <- read.csv("pregnancy rate.csv") %>%
-  janitor::clean_names()
 
-RateToProb <- function(r, t){
-  p <- 1 - exp(-r * t)
-  return(p)
-}
-
-
-preg_rate <- preg_rate %>%
-  mutate(preg_prob = RateToProb(pregnancy_rate_per1000women, 1/12))
-
-preg_rate <- preg_rate %>%
-  mutate(p_preg_age_pill = preg_prob*p_m_pill_up,
-         p_preg_age_pill_inducer = preg_prob*p_m_pill_inducer_up,
-         p_preg_age_pill_inhibitor = preg_prob*p_m_pill_inhibitor_up)
 
 #d_e <- d_c <- 0.03                      # equal discount of costs and QALYs by 3%
 
@@ -298,6 +296,9 @@ preg_rate <- preg_rate %>%
 ### STRATEGY 1 PILL ONLY
 
 ## Draw the state-transition cohort model for the strategy 1 - "Pill only"
+## ***To Confirm if this model structure is adequate***
+## *** Still need to account for the changing probabilities based on months 
+## ** ie same probability for month 1-3, 4-6 etc...
 ```{r}
 m_P_diag_pill <- matrix(0, nrow = n_states, ncol = n_states, dimnames = list(v_n, v_n))
 m_P_diag_pill["Initial", "Initial" ]  = "" 
@@ -309,15 +310,18 @@ m_P_diag_pill["Initial", "VTE" ]  = ""
 m_P_diag_pill["Initial", "MI" ]  = ""
 m_P_diag_pill["Initial", "Stroke" ]  = ""
 m_P_diag_pill["Initial", "IMB" ]  = ""
-m_P_diag_pill["IMB", "IMB quitters"]  = ""
-m_P_diag_pill["IMB", "Initial"]  = ""
-
-
-
+m_P_diag_pill["IMB", "Post-IMB"]  = ""
+m_P_diag_pill["Post-IMB", "Birth"]  = ""
+m_P_diag_pill["Post-IMB", "Induced abortion"]  = ""
+m_P_diag_pill["Post-IMB", "Spontanous abortion"]  = ""
+m_P_diag_pill["Post-IMB", "Ectopic pregnancy"]  = ""
+m_P_diag_pill["Post-IMB", "VTE" ]  = ""
+m_P_diag_pill["Post-IMB", "MI" ]  = ""
+m_P_diag_pill["Post-IMB", "Stroke" ]  = ""
 
 layout.fig <- c(1,4,4, 1)
 st_tr_diag_pill <- plotmat(t(m_P_diag_pill), t(layout.fig), self.cex = 0.5, curve = 0, arr.pos = 0.8,  
-        latex = T, arr.type = "curved", relsize = 0.85, box.prop = 0.8, 
+        latex = T, arr.type = "curved", relsize = 0.85, box.prop = 0.7, 
         cex = 0.8, box.cex = 0.7, lwd = 1)
 ```
 
@@ -351,11 +355,11 @@ Fill in the transition probability matrix for the strategy 1 - "Pill only":
 
 ```{r}
 # from Healthy
-m_P_pill["Initial", "Initial" ] <- 1 - p_m_pill_birth - p_m_pill_inducedabortion - p_m_pill_spontaneousbaortion - p_m_pill_ectopicpregnancy - p_vte_pill - p_mi_pill - p_stroke_pill - p_imb_pill 
-m_P_pill["Initial", "Birth" ]    <- p_m_pill_birth 
-m_P_pill["Initial", "Induced abortion" ]      <- p_m_pill_inducedabortion 
-m_P_pill["Initial", "Spontanous abortion" ]  <- p_m_pill_spontaneousbaortion 
-m_P_pill["Initial", "Ectopic pregnancy" ]   <- p_m_pill_ectopicpregnancy 
+m_P_pill["Initial", "Initial" ] <- 1 - v_p_pill_birth[1] - v_p_pill_inducedabortion[1] - v_p_pill_spontaneousabortion[1] - v_p_pill_ectopicpregnancy[1] - p_vte_pill - p_mi_pill - p_stroke_pill - p_imb_pill 
+m_P_pill["Initial", "Birth" ]    <- v_p_pill_birth[1]
+m_P_pill["Initial", "Induced abortion" ]      <- v_p_pill_inducedabortion[1] 
+m_P_pill["Initial", "Spontanous abortion" ]  <- v_p_pill_spontaneousabortion[1] 
+m_P_pill["Initial", "Ectopic pregnancy" ]   <- v_p_pill_ectopicpregnancy[1] 
 m_P_pill["Initial", "VTE" ] <-  p_vte_pill
 m_P_pill["Initial", "MI" ]  <- p_mi_pill
 m_P_pill["Initial", "Stroke" ] <-  p_stroke_pill 
@@ -367,10 +371,16 @@ m_P_pill["Ectopic pregnancy", "Ectopic pregnancy" ] <- 1
 m_P_pill["VTE", "VTE" ] <- 1
 m_P_pill["MI", "MI" ] <- 1
 m_P_pill["Stroke", "Stroke" ] <- 1
-m_P_pill["IMB", "IMB quitters" ] <- 0.2
-m_P_pill["IMB", "Initial"] <- 0.8
-m_P_pill["IMB quitters", "IMB quitters"] <- 1
-
+m_P_pill["IMB", "IMB"] <- 0.7
+m_P_pill["IMB", "Post-IMB"] <- 0.3
+m_P_pill["Post-IMB", "Birth"]  = v_p_pill_birth[1]
+m_P_pill["Post-IMB", "Induced abortion"]  = v_p_pill_inducedabortion[1] 
+m_P_pill["Post-IMB", "Spontanous abortion"]  = v_p_pill_spontaneousabortion[1]
+m_P_pill["Post-IMB", "Ectopic pregnancy"]  = v_p_pill_ectopicpregnancy[1]
+m_P_pill["Post-IMB", "VTE" ]  = p_vte_pill
+m_P_pill["Post-IMB", "MI" ]  = p_mi_pill
+m_P_pill["Post-IMB", "Stroke" ]  = p_stroke_pill
+m_P_pill["Post-IMB", "Post-IMB" ]  = 1 - v_p_pill_birth[1] - v_p_pill_inducedabortion[1] - v_p_pill_spontaneousabortion[1] - v_p_pill_ectopicpregnancy[1] - p_vte_pill - p_mi_pill - p_stroke_pill
 
 # check rows add up to 1
 rowSums(m_P_pill)

@@ -1,7 +1,0 @@
-"0","# create the cohort trace"
-"0","m_M_pill <- matrix(NA, "
-"0","              nrow = n_t + 1 ,  # create Markov trace (n.t + 1 because R doesn't "
-"0","                                # understand Cycle 0)"
-"0","              ncol = n_states, "
-"0","              dimnames = list(0:n_t, v_n))"
-"0","m_M_pill[1, ] <- c(1,0,0,0,0,0,0,0,0)          # initialize first cycle of Markov trace"
