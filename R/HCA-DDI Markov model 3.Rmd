@@ -14,8 +14,6 @@ output:
 2) Accruing costs for women who experience IMB depending upon months
 3) Interpretation of matrix. 
 
-
-```{r, eval = FALSE,echo=FALSE}
 Developed by the Decision Analysis in R for Technologies in Health (DARTH) workgroup:
 
 Fernando Alarid-Escudero, PhD (1) 
@@ -64,8 +62,6 @@ trademarks, trade names and any and all associated intellectual property are
 exclusively owned by THE HOSPITAL FOR Sick CHILDREN and the collaborating 
 institutions. These materials may be used, reproduced, modified, distributed 
 and adapted with proper attribution.
-```
-
 
 ```{r}
 rm(list = ls())      # clear memory (removes all the variables from the workspace)
@@ -73,10 +69,10 @@ rm(list = ls())      # clear memory (removes all the variables from the workspac
 
 # 01 Load packages
 
-```{r}
+```{r, warning=F, message=F}
 if (!require('pacman')) install.packages('pacman'); library(pacman) # use this package to conveniently install other packages
 # load (install if required) packages from CRAN
-p_load("diagram") 
+p_load("diagram", "janitor") 
 library(tidyverse)
 ```
 
@@ -357,41 +353,98 @@ Fill in the transition probability matrix for the strategy 1 - "Pill only":
 ##Prevent persons from entering after the first month and accrue costs for pill taking thereafter
 ##
 
+
 ```{r}
+# this function creates an age-specific transition probablity matrix
+age_spec_prob_matrix <- function(m_P, age) {
+  # from Healthy
+  m_P["Initial", "Initial" ] <- 1 - preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age] -
+  preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] -
+  preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age] -
+  preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age] - p_vte_pill - p_mi_pill - p_stroke_pill - p_imb_pill 
+  m_P["Initial", "Birth" ]    <- preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age]
+  m_P["Initial", "Induced abortion" ]      <- preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] 
+  m_P["Initial", "Spontanous abortion" ]  <- preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age] 
+  m_P["Initial", "Ectopic pregnancy" ]   <- preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age] 
+  m_P["Initial", "VTE" ] <-  p_vte_pill
+  m_P["Initial", "MI" ]  <- p_mi_pill
+  m_P["Initial", "Stroke" ] <-  p_stroke_pill 
+  m_P["Initial", "IMB" ]  <- p_imb_pill 
+  m_P["Birth", "Birth" ] <- 1
+  m_P["Induced abortion", "Induced abortion" ] <- 1
+  m_P["Spontanous abortion", "Spontanous abortion" ] <- 1
+  m_P["Ectopic pregnancy", "Ectopic pregnancy" ] <- 1
+  m_P["VTE", "VTE" ] <- 1
+  m_P["MI", "MI" ] <- 1
+  m_P["Stroke", "Stroke" ] <- 1
+  m_P["IMB", "IMB"] <- 0.7
+  m_P["IMB", "Post-IMB"] <- 0.3
+  m_P["Post-IMB", "Birth"]  = preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age]
+  m_P["Post-IMB", "Induced abortion"]  = preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] 
+  m_P["Post-IMB", "Spontanous abortion"]  = preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age]
+  m_P["Post-IMB", "Ectopic pregnancy"]  = preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age]
+  m_P["Post-IMB", "VTE" ]  = p_vte_pill
+  m_P["Post-IMB", "MI" ]  = p_mi_pill
+  m_P["Post-IMB", "Stroke" ]  = p_stroke_pill
+  m_P["Post-IMB", "Post-IMB" ]  = 1 - preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age] -
+  preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] -
+  preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age] -
+  preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age] - p_vte_pill - p_mi_pill - p_stroke_pill
+return(m_P)
+}
 
-age = 20
-preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age]
+# test the function
+m_P_pill20 <- age_spec_prob_matrix(m_P=m_P_pill, age=20)
+```
 
-# from Healthy
-m_P_pill["Initial", "Initial" ] <- 1 - preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age] - p_vte_pill - p_mi_pill - p_stroke_pill - p_imb_pill 
-m_P_pill["Initial", "Birth" ]    <- preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age]
-m_P_pill["Initial", "Induced abortion" ]      <- preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] 
-m_P_pill["Initial", "Spontanous abortion" ]  <- preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age] 
-m_P_pill["Initial", "Ectopic pregnancy" ]   <- preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age] 
-m_P_pill["Initial", "VTE" ] <-  p_vte_pill
-m_P_pill["Initial", "MI" ]  <- p_mi_pill
-m_P_pill["Initial", "Stroke" ] <-  p_stroke_pill 
-m_P_pill["Initial", "IMB" ]  <- p_imb_pill 
-m_P_pill["Birth", "Birth" ] <- 1
-m_P_pill["Induced abortion", "Induced abortion" ] <- 1
-m_P_pill["Spontanous abortion", "Spontanous abortion" ] <- 1
-m_P_pill["Ectopic pregnancy", "Ectopic pregnancy" ] <- 1
-m_P_pill["VTE", "VTE" ] <- 1
-m_P_pill["MI", "MI" ] <- 1
-m_P_pill["Stroke", "Stroke" ] <- 1
-m_P_pill["IMB", "IMB"] <- 0.7
-m_P_pill["IMB", "Post-IMB"] <- 0.3
-m_P_pill["Post-IMB", "Birth"]  = preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age]
-m_P_pill["Post-IMB", "Induced abortion"]  = preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] 
-m_P_pill["Post-IMB", "Spontanous abortion"]  = preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age]
-m_P_pill["Post-IMB", "Ectopic pregnancy"]  = preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age]
-m_P_pill["Post-IMB", "VTE" ]  = p_vte_pill
-m_P_pill["Post-IMB", "MI" ]  = p_mi_pill
-m_P_pill["Post-IMB", "Stroke" ]  = p_stroke_pill
-m_P_pill["Post-IMB", "Post-IMB" ]  = 1 - preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age] - p_vte_pill - p_mi_pill - p_stroke_pill
+Tip: `all()` is a function that is useful for checking if multiple conditions are all true.
 
-# check rows add up to 1
-rowSums(m_P_pill)
+## Automate the creation of age-specific transition probabilities - all age groups
+
+```{r}
+all_matrices <- list() # create an empty list to store the matrices
+for (i in 1:length(v_age)) {
+  m_P_pill_age <- age_spec_prob_matrix(m_P=m_P_pill, age=v_age[i])
+  all_matrices[[i]] <- m_P_pill_age
+}
+```
+
+```{r}
+# age = 20
+# preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age]
+# 
+# # m_P_pill is age-specific
+# 
+# # from Healthy
+# m_P_pill["Initial", "Initial" ] <- 1 - preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age] - p_vte_pill - p_mi_pill - p_stroke_pill - p_imb_pill 
+# m_P_pill["Initial", "Birth" ]    <- preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age]
+# m_P_pill["Initial", "Induced abortion" ]      <- preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] 
+# m_P_pill["Initial", "Spontanous abortion" ]  <- preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age] 
+# m_P_pill["Initial", "Ectopic pregnancy" ]   <- preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age] 
+# m_P_pill["Initial", "VTE" ] <-  p_vte_pill
+# m_P_pill["Initial", "MI" ]  <- p_mi_pill
+# m_P_pill["Initial", "Stroke" ] <-  p_stroke_pill 
+# m_P_pill["Initial", "IMB" ]  <- p_imb_pill 
+# m_P_pill["Birth", "Birth" ] <- 1
+# m_P_pill["Induced abortion", "Induced abortion" ] <- 1
+# m_P_pill["Spontanous abortion", "Spontanous abortion" ] <- 1
+# m_P_pill["Ectopic pregnancy", "Ectopic pregnancy" ] <- 1
+# m_P_pill["VTE", "VTE" ] <- 1
+# m_P_pill["MI", "MI" ] <- 1
+# m_P_pill["Stroke", "Stroke" ] <- 1
+# m_P_pill["IMB", "IMB"] <- 0.7
+# m_P_pill["IMB", "Post-IMB"] <- 0.3
+# m_P_pill["Post-IMB", "Birth"]  = preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age]
+# m_P_pill["Post-IMB", "Induced abortion"]  = preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] 
+# m_P_pill["Post-IMB", "Spontanous abortion"]  = preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age]
+# m_P_pill["Post-IMB", "Ectopic pregnancy"]  = preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age]
+# m_P_pill["Post-IMB", "VTE" ]  = p_vte_pill
+# m_P_pill["Post-IMB", "MI" ]  = p_mi_pill
+# m_P_pill["Post-IMB", "Stroke" ]  = p_stroke_pill
+# m_P_pill["Post-IMB", "Post-IMB" ]  = 1 - preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_spontaneousabortion[preg_rate_by_age$age== age] - preg_rate_by_age$v_p_pill_ectopicpregnancy[preg_rate_by_age$age== age] - p_vte_pill - p_mi_pill - p_stroke_pill
+# 
+# # check rows add up to 1
+# rowSums(m_P_pill)
 ```
 
 # 05 Run Markov model for the strategy 1 - "Pill only"
