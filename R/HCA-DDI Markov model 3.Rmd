@@ -307,6 +307,8 @@ m_P_diag_pill["Initial", "MI" ]  = ""
 m_P_diag_pill["Initial", "Stroke" ]  = ""
 m_P_diag_pill["Initial", "IMB" ]  = ""
 m_P_diag_pill["IMB", "Post-IMB"]  = ""
+m_P_diag_pill["IMB", "IMB"]  = ""
+m_P_diag_pill["Post-IMB", "Post-IMB"]  = ""
 m_P_diag_pill["Post-IMB", "Birth"]  = ""
 m_P_diag_pill["Post-IMB", "Induced abortion"]  = ""
 m_P_diag_pill["Post-IMB", "Spontanous abortion"]  = ""
@@ -314,6 +316,7 @@ m_P_diag_pill["Post-IMB", "Ectopic pregnancy"]  = ""
 m_P_diag_pill["Post-IMB", "VTE" ]  = ""
 m_P_diag_pill["Post-IMB", "MI" ]  = ""
 m_P_diag_pill["Post-IMB", "Stroke" ]  = ""
+
 
 layout.fig <- c(1,4,4,1)
 st_tr_diag_pill <- plotmat(t(m_P_diag_pill), t(layout.fig), self.cex = 0.5, curve = 0, arr.pos = 0.6,  
@@ -356,7 +359,7 @@ Fill in the transition probability matrix for the strategy 1 - "Pill only":
 
 ```{r}
 # this function creates an age-specific transition probablity matrix
-age_spec_prob_matrix <- function(m_P, age) {
+make_age_spec_prob_matrix <- function(m_P, age) {
   # from Healthy
   m_P["Initial", "Initial" ] <- 1 - preg_rate_by_age$v_p_pill_birth[preg_rate_by_age$age== age] -
   preg_rate_by_age$v_p_pill_inducedabortion[preg_rate_by_age$age== age] -
@@ -451,27 +454,43 @@ for (i in 1:length(v_age)) {
 ##And need to run markov chain for each age group for 1 year
 
 ```{r}
-for (t in 1:n_t){                   # loop through the number of cycles
+
+all_markov_models <- list()
+for (age in v_age){
+  m_P_pill <- make_age_spec_prob_matrix(m_P_pill, age)
+  
+  for (t in 1:n_t){                   # loop through the number of cycles
   m_P_pill_run <- m_P_pill
   
-  for (t > 1){
-    m_P_pill_run["Initial", "IMB] <- 0
-    m_P_pill_run["Initial",  "Inital"] <- m_P_pill[“Initial, “Inital”] + m_P_pill[“Initial, “IMB”]}
+  if (t > 1){
+    m_P_pill_run["Initial", "IMB"] <- 0
+    m_P_pill_run["Initial",  "Initial"] <- m_P_pill["Initial", "Initial"] + m_P_pill["Initial", "IMB"]
+    }
   
-  for (t %in% c(2,3)) {
-    m_P_pill_run["IMB", "Post IMB"] <- 0.2
+  if (t == 2 | t==3) {
+    m_P_pill_run["IMB", "Post-IMB"] <- 0.2
+    m_P_pill_run["IMB", "IMB"] <- 0.8
   }
   
-  for (t %in% c(4:9)){
-    m_P_pill_run["IMB", "Post IMB"] <- 0.3
+  if (t >3){
+    m_P_pill_run["IMB", "Post-IMB"] <- 0.3
+    m_P_pill_run["IMB", "IMB"] <- 0.7
   }
   
-  for (t %in% c(10:12)){
-    m_P_pill_run["IMB", "Post IMB"] <- 0.5
+  if (t >9){
+    m_P_pill_run["IMB", "Post-IMB"] <- 0.5
+    m_P_pill_run["IMB", "IMB"] <- 0.5
   }
   
   m_M_pill[t + 1, ] <- m_M_pill[t, ] %*% m_P_pill_run  # estimate the state vector for the next cycle (t + 1)
+
+  
+  
+  }
+  all_markov_models[[age]] <- m_M_pill
 }
+
+
 
 ```
 
