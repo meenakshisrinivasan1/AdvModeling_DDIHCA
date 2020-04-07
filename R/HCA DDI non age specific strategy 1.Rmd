@@ -8,7 +8,9 @@ output:
 ## Model description for Strategy 1 pill only- 
 - This model does not consider a post-imb state and assumes that women can only enter the imb state once and continue in that state (constantly).
 - Does not consider age specific probabilities for birth, ia, sa, and ep
- 
+
+## Need to do univariate sensitivity analysis 
+eg 1. p_vte 0.0000833326 (0.00005-0.00010)
 
 ```{r, eval = FALSE,echo=FALSE}
 Developed by the Decision Analysis in R for Technologies in Health (DARTH) workgroup:
