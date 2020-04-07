@@ -1,0 +1,326 @@
+---
+title: 'HCA-DDI Model'
+author: "Meenakshi Srinivasan"
+output:
+  pdf_document: default
+  html_document: default
+---
+## Model description for Strategy 1 pill only- 
+- This model does not consider a post-imb state and assumes that women can only enter the imb state once and continue in that state (constantly).
+- Does not consider age specific probabilities for birth, ia, sa, and ep
+ 
+
+```{r, eval = FALSE,echo=FALSE}
+Developed by the Decision Analysis in R for Technologies in Health (DARTH) workgroup:
+
+Fernando Alarid-Escudero, PhD (1) 
+
+Eva A. Enns, MS, PhD (2)	
+
+M.G. Myriam Hunink, MD, PhD (3,4)
+
+Hawre J. Jalal, MD, PhD (5) 
+
+Eline M. Krijkamp, MSc (3)	
+
+Petros Pechlivanoglou, PhD (6,7)
+
+Alan Yang, MSc (7)
+
+In collaboration of: 		
+
+1. Drug Policy Program, Center for Research and Teaching in Economics (CIDE) - CONACyT, 
+   Aguascalientes, Mexico
+2. University of Minnesota School of Public Health, Minneapolis, MN, USA
+3. Erasmus MC, Rotterdam, The Netherlands
+4. Harvard T.H. Chan School of Public Health, Boston, USA
+5. University of Pittsburgh Graduate School of Public Health, Pittsburgh, PA, USA
+6. University of Toronto, Toronto ON, Canada
+7. The Hospital for Sick Children, Toronto ON, Canada
+
+Please cite our publications when using this code:
+ 
+- Jalal H, Pechlivanoglou P, Krijkamp E, Alarid-Escudero F, Enns E, Hunink MG. 
+An Overview of R in Health Decision Sciences. Med Decis Making. 2017; 37(3): 735-746. 
+https://journals.sagepub.com/doi/abs/10.1177/0272989X16686559
+ 
+- Krijkamp EM, Alarid-Escudero F, Enns EA, Jalal HJ, Hunink MGM, Pechlivanoglou P. 
+Microsimulation modeling for health decision sciences using R: A tutorial. 
+Med Decis Making. 2018;38(3):400–22. 
+https://journals.sagepub.com/doi/abs/10.1177/0272989X18754513
+ 
+- Krijkamp EM, Alarid-Escudero F, Enns E, Pechlivanoglou P, Hunink MM, Jalal H. 
+A Multidimensional Array Representation of State-Transition Model Dynamics. 
+Med Decis Making. Online First https://doi.org/10.1177/0272989X19893973
+
+Copyright 2017, THE HOSPITAL FOR SICK CHILDREN AND THE COLLABORATING INSTITUTIONS. 
+All rights reserved in Canada, the United States and worldwide. Copyright, 
+trademarks, trade names and any and all associated intellectual property are 
+exclusively owned by THE HOSPITAL FOR Sick CHILDREN and the collaborating 
+institutions. These materials may be used, reproduced, modified, distributed 
+and adapted with proper attribution.
+```
+
+
+```{r}
+rm(list = ls())      # clear memory (removes all the variables from the workspace)
+```
+
+# 01 Load packages
+
+```{r}
+if (!require('pacman')) install.packages('pacman'); library(pacman) # use this package to conveniently install other packages
+# load (install if required) packages from CRAN
+p_load("diagram", "tidyverse", "here") 
+```
+
+# 02 Load functions
+
+```{r}
+ProbToRate <- function(p){
+  # argument
+  # p : the probability
+  # Retunrs:
+  # r : rate
+  r <- -log(1 - p)
+  r
+}
+
+RateToProb <- function(r, t){
+  p <- 1 - exp(-r * t)
+  return(p)
+}
+```
+
+# 03 Input model parameters
+
+```{r}
+# Strategy names
+v_names_str <- c("pill-only", "pill-plus-inducer", "pill-plus-inhibitor")  
+
+# Number of strategies
+n_str <- length(v_names_str)
+
+# Markov model parameters
+# state names- 9 states
+v_n  <- c("initial", "birth", "induced-abortion",         
+          "spontanous-abortion", "ectopic-pregnancy",
+          "vte", "mi", "stroke", "imb")    
+
+# number of states
+n_states  <- length(v_n)                                  
+                                
+v_age <- c(15:44)  #vector of ages
+
+n_t <- 12 # 12 cycles of 1 month duration
+
+# Monthly probability of failure of pill-only, pill-plus-inducer and pill-plus-inhibitor
+p_failure_pill <- 0.0009245723
+p_failure_pill_inducer <- 0.001299155
+p_failure_pill_inhibitor <- 0.0006830999
+
+# Monthly probability of birth
+p_birth <- 0.03730147
+p_ia <- 0.04938104
+p_sa <- 0.01523964
+p_ep <- 0.0008371774
+
+# Probability of unintended pregnancy outcomes by strategy
+# Strategy 1 pill-only
+p_birth_pill <- p_birth * p_failure_pill
+p_ia_pill <- p_ia * p_failure_pill
+p_sa_pill <- p_sa * p_failure_pill
+p_ep_pill <- p_ep * p_failure_pill
+
+# Probability of adverse events - general
+p_vte <- 0.0000833326
+p_mi <- 0.00001814990
+p_stroke <- 0.00003085469
+
+# Probability of serious adverse events - pill-only
+p_vte_pill <- p_vte
+p_mi_pill <- p_mi
+p_stroke_pill <- p_stroke
+
+### Probability of IMB - pill-only ###
+
+### Probability of IMB - pill-plus-inhibitor ### 
+# Note: These probabilities will be assumed to be the same as for the pill-alone group
+
+# Monthly probability for IMB
+# 12 month probability = 0.5% = 0.005
+# 1 month probability
+
+ProbToRate(0.005)
+RateToProb(0.005012542, 1/12)
+
+p_imb_pill <- 0.0004176246     # % of women with IMB
+
+# Costs of initial state for three strategies
+
+c_pill           <- 52          # cost of remaining in pill only group
+
+# Cost of birth outcomes 
+c_birth  <- 13252              # cost of remaining one cycle sick
+c_ia     <- 931                # cost of remaining one cycle dead
+c_sa     <- 1141               # cost of spontaneous abortion
+c_ep     <- 6174               # cost of ectopic pregnancy
+
+# cost of adverse event outcomes
+c_vte     <- 14305                # cost of venous thromboembolism
+c_mi      <- 23528                # cost of myocardial infarction
+c_stroke  <- 28979                # cost of stroke
+
+c_imb     <- 50                   # cost of intermenstrual bleeding (conservative)
+ 
+
+# Utility values 
+
+## Utility of initial state for three strategies 
+# Assuming perfect health on pill alone  
+u_pill           <-  1                       
+# Lowered utility because of condition that requires drug (epilepsy, HIV etc)       
+  
+u_birth  <- 0.9064              # Utility of birth     
+u_ia     <- 0.9615              # Utility of abortion
+u_sa     <- 0.9423              # Utility of spontaneous abortion
+u_ep     <- 0.91667             # Utility of ectopic pregnancy
+  
+u_vte    <- 0.81                # Utility of VTE
+u_mi     <- 0.67                # Utility of MI
+u_stroke <- 0.33                # Utility of Stroke
+u_imb    <- 0.78                # Utility of Inter menstrual bleeding
+
+```
+
+
+# 04 Define and initialize matrices and vectors
+
+## 04.1 Cohort trace for the strategy 1 - "Pill only"
+
+```{r}
+# create the cohort trace
+m_M_pill <- matrix(NA, 
+              nrow = n_t + 1 ,  # create Markov trace (n.t + 1 because R doesn't 
+                                # understand Cycle 0)
+              ncol = n_states, 
+              dimnames = list(0:n_t, v_n))
+
+m_M_pill[1, ] <- c(1, rep(0, n_states - 1))          # initialize first cycle of Markov trace
+```
+
+## 04.2 Transition probability matrix for the strategy 1 - "Pill only"
+
+```{r}
+# create the transition probability matrix
+m_P_pill  <- matrix(0,
+               nrow = n_states, ncol = n_states,
+               dimnames = list(v_n, v_n)) # name the columns and rows of the transition 
+                                          # probability matrix
+m_P_pill
+```
+
+Fill in the transition probability matrix for the strategy 1 - "Pill only":
+
+```{r}
+
+  m_P_pill["initial", "initial" ]    <- 1 - p_birth_pill - p_ia_pill -
+  p_sa_pill - p_ep_pill - p_vte_pill - p_mi_pill - p_stroke_pill - p_imb_pill 
+  
+  m_P_pill["initial", "birth" ]      <- p_birth_pill
+  
+  m_P_pill["initial", "induced-abortion" ]      <- p_ia_pill 
+  m_P_pill["initial", "spontanous-abortion" ]  <- p_sa_pill  
+  m_P_pill["initial", "ectopic-pregnancy" ]   <- p_ep_pill  
+  m_P_pill["initial", "vte" ] <-  p_vte_pill
+  m_P_pill["initial", "mi" ]  <- p_mi_pill
+  m_P_pill["initial", "stroke" ] <-  p_stroke_pill 
+  m_P_pill["initial", "imb" ]  <- p_imb_pill 
+  m_P_pill["birth", "birth" ] <- 1
+  m_P_pill["induced-abortion", "induced-abortion" ] <- 1
+  m_P_pill["spontanous-abortion", "spontanous-abortion" ] <- 1
+  m_P_pill["ectopic-pregnancy", "ectopic-pregnancy" ] <- 1
+  m_P_pill["vte", "vte" ] <- 1
+  m_P_pill["mi", "mi" ] <- 1
+  m_P_pill["stroke", "stroke" ] <- 1
+  m_P_pill["imb", "imb"] <- 1
+
+# check rows add up to 1
+rowSums(m_P_pill)
+```
+
+# 05 Run Markov model for the strategy 1 - "Pill only"
+
+```{r}
+for (t in 1:n_t){                   # loop through the number of cycles
+  m_M_pill[t + 1, ] <- m_M_pill[t, ] %*% m_P_pill  # estimate the state vector for the next cycle (t + 1)
+}
+
+rowSums(m_M_pill)
+```
+
+# 06 Compute and Plot Outcomes for the strategy 1 - "Pill only"
+
+## 06.1 Cohort trace for the strategy 1 - "Pill only"
+
+```{r}
+df_M_pill <- as.data.frame(m_M_pill) %>%
+  tibble::rowid_to_column("cycle") %>%
+  tidyr::gather(state, probability, -1)
+
+ggplot(df_M_pill, aes(cycle, probability, color = state)) +
+  geom_line()
+
+```
+
+## 06.2 Total Probability for Unintended pregnancy and adverse event outcomes for the strategy 1 - "Pill only"
+
+```{r}
+#preliminary results
+v_up_pill <- rowSums(m_M_pill[, 2:5])  # calculating the UP probability   
+
+v_adverseevents_pill <- rowSums(m_M_pill[, 6:9])
+n_women <- 250000
+n_births_pill <- m_M_pill[13, "birth"] * n_women
+n_ia_pill <- m_M_pill[13, "induced-abortion"] * n_women
+n_vte_pill <- m_M_pill[13, "vte"] * n_women
+n_mi_pill <- m_M_pill[13, "mi"] * n_women
+n_stroke_pill <- m_M_pill[13, "stroke"] * n_women
+n_imb_pill <- m_M_pill[13, "imb"] * n_women
+```
+
+
+# 07 Compute Cost-Effectiveness Outcomes for the strategy 1 - "Pill only"
+
+## 07.1 Mean Costs and QALYs for the strategy 1 - "Pill only"
+
+```{r}
+# per cycle
+# calculate expected costs by multiplying m_M with the cost vector for the different 
+# health states   
+v_tc_pill <- m_M_pill %*% c(c_pill, c_birth, c_inducedabortion, c_spontaneousabortion,
+                  c_ectopicpregnancy, c_vte, c_mi, c_stroke, c_imb)  
+# calculate expected QALYs by multiplying m_M with the utilities for the different 
+# health states   
+v_tu_pill <- m_M_pill %*% c(u_pill, u_birth, u_inducedabortion, u_spontaneousabortion,
+                  u_ectopicpregnancy, u_vte, u_mi, u_stroke, u_imb)  
+```
+
+## 07.2 Discounted Mean Costs and QALYs for the strategy 1 - "Pill only"
+
+```{r}
+# Discount costs by multiplying the cost vector with discount weights (v_dw) 
+# v_tc_d_pill <-  t(v_tc_pill) %*% v_dwc
+# Discount QALYS by multiplying the QALYs vector with discount weights (v_dw)
+# v_te_d_pill <-  t(v_tu_pill) %*% v_dwe
+```
+
+## 07.3 Results for the strategy 1 - "Pill only"
+
+```{r}
+results_pill <- data.frame( "Total Discounted Cost" = v_tc_d_pill, 
+                   
+                       "Total Discounted QALYs" = v_te_d_pill, 
+                       check.names = F)
+results_pill
+```
